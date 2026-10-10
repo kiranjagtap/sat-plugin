@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "sat-marketplace",
+  "description": "Local marketplace for the sat plugin",
+  "owner": {
+    "name": "Kiran"
+  },
+  "plugins": [
+    {
+      "name": "sat",
+      "description": "Spring Boot API test automation with correlated application logs, producing a structured SAT Test Certificate and a recorded approval before production deployment.",
+      "source": "./",
+      "category": "development"
+    }
+  ]
+}

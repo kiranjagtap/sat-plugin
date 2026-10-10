@@ -1,0 +1,12 @@
+{
+  "name": "sat",
+  "displayName": "SAT Report",
+  "version": "0.1.0",
+  "description": "Spring Boot API test automation with correlated application logs, producing a structured SAT Test Certificate and a recorded approval before production deployment.",
+  "author": {
+    "name": "Kiran"
+  },
+  "keywords": ["testing", "playwright", "spring-boot", "qa", "sat", "release-approval"],
+  "license": "MIT",
+  "defaultEnabled": true
+}

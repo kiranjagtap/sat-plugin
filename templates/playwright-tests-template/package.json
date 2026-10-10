@@ -1,0 +1,17 @@
+{
+  "name": "__PROJECT_NAME__-api-tests",
+  "version": "1.0.0",
+  "description": "Playwright API test automation for __PROJECT_NAME__",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:list": "playwright test --reporter=list",
+    "report": "playwright show-report",
+    "qa-certificate": "node generate-qa-certificate.js",
+    "test:certify": "playwright test && node generate-qa-certificate.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@types/node": "^22.10.5"
+  }
+}
