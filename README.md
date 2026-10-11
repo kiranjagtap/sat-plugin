@@ -9,11 +9,14 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
 
 ## What it does
 
-1. **`/sat-scaffold`** — one-time per project. Adds:
-   - `RequestIdFilter` — tags every request with a correlation id (`X-Request-Id`), placed
-     in SLF4J's MDC so every log line the app emits while handling that request carries it.
+1. **`/sat-scaffold`** — one-time per project. Adds, after first checking what's already
+   there (see "Adapting to an existing project" below):
+   - `RequestIdFilter` — tags every request with a correlation id, placed in SLF4J's MDC so
+     every log line the app emits while handling that request carries it. Skipped if the
+     project already has an equivalent filter; its header/MDC key are reused instead.
    - A `logging.pattern.*` / `logging.file.name` entry in `application.yml` or
-     `application.properties` so those correlated lines also land in a log file on disk.
+     `application.properties` so those correlated lines also land in a log file on disk —
+     only when nothing else already controls logging output (see below).
    - `playwright-tests/` — a Playwright API test harness (TypeScript) with a `callAndLog`
      helper that sends the correlation id, and a pluggable log source (local file, or Splunk
      for a deployed non-prod environment) that reads back the matching application log lines
@@ -41,6 +44,28 @@ From a Claude Code session, in any project (or globally):
 /plugin install sat@sat-marketplace
 ```
 Same pattern as installing `saga`.
+
+## Adapting to an existing project
+
+This plugin doesn't assume a project's logging is "greenfield." `/sat-scaffold` checks, in
+order:
+
+- **Is there already a correlation-id filter?** If a class already reads a header and puts
+  it in SLF4J's MDC, that filter's header name and MDC key are reused end-to-end — no second
+  filter is added, and `/sat-run` tells the Playwright harness which header to send via
+  `CORRELATION_HEADER` (not necessarily `X-Request-Id`).
+- **Is logging controlled by a custom `logback.xml`/`logback-spring.xml`?** If so, Spring
+  Boot's `logging.pattern.*` properties are not read at all (a plain `logback.xml` loads
+  before Spring's context exists), so this command doesn't touch `application.yml` in that
+  case. It checks whether the correlation MDC key already appears in the existing config; if
+  not, it shows the smallest possible edit to add — the exact pattern-string splice, or the
+  equivalent for a JSON/structured encoder — rather than attempting to rewrite someone's
+  logging XML automatically. The project's own log format and Splunk field-extraction rules
+  are left completely alone either way.
+- **The log line's format never matters to this plugin.** Both the local-file and Splunk log
+  sources find lines with a plain substring search on the correlation id — they don't parse
+  structure — so plain text, JSON, or anything else all work identically as long as the id
+  shows up somewhere in the line.
 
 ## A note on scope
 

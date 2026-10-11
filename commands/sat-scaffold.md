@@ -23,42 +23,106 @@ Determine the artifact name (Gradle: `rootProject.name` in `settings.gradle`; Ma
 `<artifactId>` in `pom.xml`). Use `--artifact-id` from `$ARGUMENTS` instead if given. This
 becomes `__ARTIFACT_NAME__` below (used for the log file name and default project name).
 
-## 2. Add the request-correlation filter
+## 2. Detect any existing request-correlation mechanism
 
-Find the main `@SpringBootApplication` class to get the base package. Decide where the
-filter belongs:
+Before adding anything, check whether this project already has a way to correlate a request
+across its log lines — reusing it beats adding a second, competing one:
+
+- Search for a class extending `OncePerRequestFilter` (or a `HandlerInterceptor`) that reads
+  a request header and calls `MDC.put(...)`. If found, read its header name and MDC key out
+  of the source (the header constant/literal, and the string passed to `MDC.put`) and treat
+  those as **the header and MDC key in effect** for the rest of this command. Report where
+  the filter is and do not add `RequestIdFilter` — skip step 3 entirely.
+- Otherwise, if `management.tracing.*` is configured or a `micrometer-tracing` dependency is
+  present: note it, but don't try to repurpose it. Micrometer's `traceId` is generated per
+  span, not from an incoming header, so it gives the Playwright side no way to tag a specific
+  outgoing request with an id to look for afterwards. Treat this project as having nothing
+  reusable and continue to step 3.
+- Otherwise there's nothing to reuse — continue to step 3, where the header/MDC key in
+  effect will be the defaults, `X-Request-Id` / `requestId`.
+
+Whatever header and MDC key end up "in effect" here get recorded in `.claude/sat/state.json`
+(step 6) and passed to the Playwright harness by `/sat-run` as `CORRELATION_HEADER` — so the
+test side always sends whatever header the app is actually reading, which won't always be
+`X-Request-Id`.
+
+## 3. Add the request-correlation filter (skip if step 2 found one)
+
+If step 2 found an existing filter, skip this step and move to step 4.
+
+Otherwise, find the main `@SpringBootApplication` class to get the base package. Decide
+where the filter belongs:
 - If a package named `<base>.web` or `<base>.config` already exists (look for existing
   `@RestControllerAdvice`, filters, or config classes), use it.
 - Otherwise create `<base>.web`.
 
-Skip this step entirely if a class extending `OncePerRequestFilter` that already reads/sets
-an `X-Request-Id`-style header exists anywhere in the project — report where it is and move
-on, rather than adding a second one.
-
-Otherwise, read `${CLAUDE_PLUGIN_ROOT}/templates/RequestIdFilter.java.template`, replace
+Read `${CLAUDE_PLUGIN_ROOT}/templates/RequestIdFilter.java.template`, replace
 `__TARGET_PACKAGE__` with the chosen package, and write it to that package's directory as
-`RequestIdFilter.java`.
+`RequestIdFilter.java`. It defaults to header `X-Request-Id` / MDC key `requestId`, both
+later overridable via `sat.correlation.header` / `sat.correlation.mdc-key` properties
+without touching the code.
 
-## 3. Add correlation logging config
+## 4. Detect and adapt the logging configuration
 
-Find the app's config file: `src/main/resources/application.yml` (or `.yaml`), or
-`application.properties`.
+The exact log line *format* doesn't matter to this plugin — both the local-file and Splunk
+log sources find lines by a plain substring match on the correlation id, not by parsing
+structure. The only thing that matters is that whatever logging config is actually in
+control renders `%X{<mdc-key>}` (the key decided in step 2) somewhere in every log line. So
+detect what's actually in control before assuming Spring Boot's simplified properties will
+do anything — they won't, on a project with its own Logback config file.
 
-Check whether it already has a `logging.pattern.console` (properties) or `logging: pattern:
-console:` (YAML) entry. If so, skip this step and report that logging config already exists
-— don't duplicate or overwrite it.
+**4a. Check for a dedicated Logback config** — `src/main/resources/logback.xml`,
+`logback-spring.xml`, or `logback.groovy`.
 
-Otherwise:
-- YAML: append the contents of `${CLAUDE_PLUGIN_ROOT}/templates/logging-block.yml`, with
-  `__ARTIFACT_NAME__` replaced by the real artifact name, merged under the file's existing
-  top-level keys (don't create a second `logging:` key if one exists for other settings —
-  merge into it).
-- Properties: append the contents of `${CLAUDE_PLUGIN_ROOT}/templates/logging-block.properties`
-  with the same substitution.
+- **`logback.xml` present**: Logback loads this directly, before Spring's context starts, so
+  `logging.pattern.*`/`logging.file.name` in `application.yml`/`.properties` are never
+  consulted — appending them would silently do nothing. Go to 4b.
+- **`logback-spring.xml` present**: check whether it includes Spring Boot's own defaults
+  (`<include resource="org/springframework/boot/logging/logback/defaults.xml"/>`, or any
+  `${CONSOLE_LOG_PATTERN}`/`${FILE_LOG_PATTERN}` reference). If so, Spring Boot's properties
+  *are* honored here — treat this the same as "no custom config" (go to 4c). If it defines
+  its own pattern/encoder independently of those, go to 4b.
+- **`logback.groovy` present**: treat like a custom config that doesn't include Spring's
+  defaults — go to 4b (Groovy config isn't a format this command edits).
+- **None of these exist**: go to 4c — the original behavior.
 
-Add `logs/` to the project's `.gitignore` if it isn't already ignored.
+**4b. A custom Logback config is in control — don't edit it automatically.**
 
-## 4. Scaffold the Playwright test harness
+Grep the file for `%X{` to see what MDC keys it already renders anywhere, in any appender's
+pattern/encoder:
+- If the key from step 2 (or its default, `requestId`) is already there, this project's own
+  config already does the job — report that and skip, nothing to change.
+- If it isn't, don't try to splice XML automatically — encoder styles vary too much (a plain
+  `<pattern>`, `PatternLayoutEncoder`, a JSON/structured encoder like
+  `net.logstash.logback.encoder.LogstashEncoder`, async wrapper appenders) to safely guess at
+  structure, and a mis-edit to someone's existing, production logging config is a worse
+  outcome than asking. Instead, show the smallest change needed and ask the user to apply it:
+  - Pattern-based encoder: show their exact existing pattern string with `%X{<mdc-key>:-}`
+    spliced in, changing nothing else — so it keeps matching whatever Splunk field extraction
+    already depends on this project's current format.
+  - JSON/structured encoder: name the MDC-inclusion option it supports instead of a pattern
+    edit (most do — e.g. logstash-logback-encoder's `<mdc/>` or `<includeMdcKeyName>` tag).
+  Record this as pending manual action in state.json (step 6), and say so clearly in the
+  final summary (step 7) — the filter and Playwright harness still work independently of
+  this, but no log lines will correlate to a specific test call until it's done.
+
+**4c. No custom Logback config (or one deferring to Spring Boot's defaults) — use
+properties.**
+
+The original behavior. Find `src/main/resources/application.yml`/`.yaml` or
+`application.properties`. Check whether it already has a `logging.pattern.console`
+(properties) or `logging: pattern: console:` (YAML) entry — if so, skip and report that
+logging config already exists, don't duplicate it. Otherwise append
+`${CLAUDE_PLUGIN_ROOT}/templates/logging-block.yml` (or `.properties`), substituting
+`__ARTIFACT_NAME__` with the real artifact name and `__MDC_KEY__` with the key decided in
+step 2 (`requestId` unless an existing filter uses something else) — merged under the file's
+existing top-level keys, not as a second `logging:` block if one already exists for other
+settings.
+
+In every branch above, add `logs/` to the project's `.gitignore` if it isn't already
+ignored.
+
+## 5. Scaffold the Playwright test harness
 
 If a `playwright-tests/` directory already exists at the project root, stop here — report
 what's already there and don't touch it. (If the user wants it refreshed, that's a manual,
@@ -73,7 +137,7 @@ real artifact name, across `package.json`, `generate-qa-certificate.js`, `playwr
 
 Then run `npm install` inside `playwright-tests/`.
 
-## 5. Record state
+## 6. Record state
 
 Create or update `.claude/sat/state.json` at the project root:
 ```json
@@ -81,11 +145,21 @@ Create or update `.claude/sat/state.json` at the project root:
   "scaffolded": true,
   "scaffolded_at": "<ISO timestamp>",
   "artifact_name": "<artifact name>",
+  "correlation": {
+    "header": "<header name in effect, e.g. X-Request-Id>",
+    "mdc_key": "<MDC key in effect, e.g. requestId>",
+    "source": "sat-filter" | "existing-filter",
+    "logging_config": "application-properties" | "logback-custom-ok" | "logback-custom-manual-action-pending"
+  },
   "last_run": null
 }
 ```
 
-## 6. Summarize
+## 7. Summarize
 
-Tell the user plainly what was created vs. skipped at each step, and that `/sat-run` is the
-next command — it needs the app actually running (reachable over HTTP) to do anything useful.
+Tell the user plainly what was created vs. skipped vs. reused at each step. If step 4 landed
+in the manual-action branch (4b), call that out clearly and separately from the rest — the
+filter and Playwright harness are in place and `/sat-run` will work, but app log lines won't
+correlate to specific test calls until the user adds the shown snippet to their own Logback
+config. Otherwise, confirm `/sat-run` is the next command — it needs the app actually running
+(reachable over HTTP) to do anything useful.

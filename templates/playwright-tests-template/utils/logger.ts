@@ -25,6 +25,12 @@ const LOG_SETTLE_MS = Number(process.env.LOG_SETTLE_MS || 200);
 // on the first API call.
 const logSource = getLogSource();
 
+// Which header carries the correlation id to the app. Must match whatever the app's own
+// filter actually reads — /sat-scaffold records the right value in .claude/sat/state.json
+// and /sat-run passes it through as this env var (it won't always be 'X-Request-Id': if
+// scaffold found and reused an existing correlation filter, it'll be whatever that uses).
+const CORRELATION_HEADER = process.env.CORRELATION_HEADER || 'X-Request-Id';
+
 type HttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
 
 /**
@@ -33,12 +39,14 @@ type HttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete';
  *  2. appended to a run-wide .log file under playwright-tests/logs/
  *  3. attached to this specific test's entry in the HTML report / results.json (so
  *     generate-qa-certificate.js can render it per-test)
- *  4. correlated application-side: a per-call `X-Request-Id` is sent to the app, the app tags
- *     every log line it emits while handling that request with the same id (via SLF4J MDC —
- *     see RequestIdFilter.java), and this function reads those matching lines back out via
- *     whichever LogSource is configured (local file for a local bootRun, Splunk for a
- *     deployed non-prod instance) so they travel with the test result, not just Playwright's
- *     HTTP-level view.
+ *  4. correlated application-side: a per-call id is sent to the app via CORRELATION_HEADER
+ *     (default `X-Request-Id`), the app tags every log line it emits while handling that
+ *     request with the same id (via SLF4J MDC — see RequestIdFilter.java, or an existing
+ *     filter /sat-scaffold found and reused), and this function reads those matching lines
+ *     back out via whichever LogSource is configured (local file for a local bootRun, Splunk
+ *     for a deployed non-prod instance) so they travel with the test result, not just
+ *     Playwright's HTTP-level view. The log line's surrounding format doesn't matter — both
+ *     log sources find lines by a plain substring match on the id, not by parsing structure.
  */
 export async function callAndLog(
   testInfo: TestInfo,
@@ -49,7 +57,7 @@ export async function callAndLog(
   options?: { data?: unknown; headers?: Record<string, string> },
 ): Promise<APIResponse> {
   const requestId = randomUUID();
-  const headers = { ...(options?.headers ?? {}), 'X-Request-Id': requestId };
+  const headers = { ...(options?.headers ?? {}), [CORRELATION_HEADER]: requestId };
   const start = Date.now();
 
   const response = await request[method](url, { data: options?.data, headers });

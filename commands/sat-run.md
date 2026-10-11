@@ -22,6 +22,11 @@ From `$ARGUMENTS` (or sensible defaults if not given):
   `SPLUNK_INDEX`, and `SPLUNK_TOKEN` (or `SPLUNK_USERNAME`/`SPLUNK_PASSWORD`) set in the
   environment already — don't try to collect secrets through the conversation and write them
   anywhere.
+- `CORRELATION_HEADER` — read from `.claude/sat/state.json`'s `correlation.header` field
+  (default `X-Request-Id` if that field is missing, e.g. a project scaffolded before this was
+  tracked). This is what the Playwright harness sends on every call, and it has to match
+  whatever header the app's filter actually reads — which isn't always `X-Request-Id` if
+  `/sat-scaffold` found and reused an existing correlation filter instead of adding its own.
 
 ## 3. Preflight check
 
@@ -34,7 +39,8 @@ than letting Playwright fail with a confusing connection-refused wall of text.
 
 In `playwright-tests/`, run:
 ```bash
-BASE_URL=<BASE_URL> ENVIRONMENT="<ENVIRONMENT>" LOG_SOURCE=<LOG_SOURCE> npm run test:certify
+BASE_URL=<BASE_URL> ENVIRONMENT="<ENVIRONMENT>" LOG_SOURCE=<LOG_SOURCE> \
+  CORRELATION_HEADER=<CORRELATION_HEADER> npm run test:certify
 ```
 Let it run to completion even if some tests fail — a FAIL verdict is a valid, useful result
 here, not an error to recover from.
