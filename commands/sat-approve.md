@@ -37,7 +37,9 @@ correct it, not retype it):
 - **Description** — one line on what this release/change covers. Ask.
 - **Scope** — one or two lines on what this run actually covers (which endpoints/scenarios
   were exercised, and anything notable it does *not* cover). Ask; this is the project-specific
-  detail that belongs on the certificate, not a generic boilerplate sentence.
+  detail that belongs on the certificate, not a generic boilerplate sentence. Unlike the other
+  fields, Scope is *not* rendered as a meta-grid card on the certificate -- it's a plain line
+  of text just above the Summary table (see step 4).
 - **Testers** — who ran/verified these tests. Ask (comma-separated names if more than one).
 - **SRE's** — any Site Reliability Engineers who reviewed this. Ask; allow "none".
 - **Deployment date** — the planned or actual deployment date (distinct from today's
@@ -74,8 +76,18 @@ becomes, e.g.:
 <div class="meta-item"><div class="label">Ticket</div><div class="value">JIRA-1234</div></div>
 ```
 
-Do this for Service, Ticket, Release Version, Description, Scope, Testers, SRE's, Deployment
+Do this for Service, Ticket, Release Version, Description, Testers, SRE's, Deployment
 Date, and Certification Date, using the values collected in step 2.
+
+Scope is different -- it's not a meta-item, it's a plain paragraph just above the Summary
+table:
+```html
+<p class="scope-line"><strong>Scope:</strong> Pending approval</p>
+```
+becomes:
+```html
+<p class="scope-line"><strong>Scope:</strong> Widget API: create (incl. blank/over-length validation), get by id, list, delete (incl. repeat delete and unknown id -> 404). Not covered: update/PATCH, auth, persistence (in-memory store).</p>
+```
 
 Then find the Endorsement block:
 ```html

@@ -135,7 +135,7 @@ const summaryRows = tests
     return `
       <tr>
         <td>${id}</td>
-        <td>${escapeHtml(t.suite ? `${t.suite} — ${t.title}` : t.title)}</td>
+        <td>${escapeHtml(t.title)}</td>
         <td class="${resultClass}">${icon} ${escapeHtml(label + remarkText + errorText)}</td>
       </tr>`;
   })
@@ -203,9 +203,6 @@ const html = `<!doctype html>
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; margin: 0; padding: 40px; background: #fff; max-width: 960px; margin-inline: auto; }
   h1 { font-size: 22px; margin: 0 0 4px; }
   .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
-  .verdict { padding: 16px 20px; border-radius: 8px; font-size: 18px; font-weight: 600; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
-  .verdict.pass { background: #dafbe1; color: var(--ok); border: 1px solid #aceebb; }
-  .verdict.fail { background: #ffebe9; color: var(--bad); border: 1px solid #ffc1bc; }
   .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .meta-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
   .meta-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -218,6 +215,7 @@ const html = `<!doctype html>
   .stat.warn .n { color: var(--warn); } .stat.muted .n { color: var(--muted); }
   h2 { font-size: 15px; border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-top: 32px; }
   h3 { font-size: 13.5px; margin: 0 0 4px; }
+  .scope-line { font-size: 13.5px; margin: 4px 0 4px; line-height: 1.5; }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { background: var(--bg-soft); font-size: 11px; text-transform: uppercase; color: var(--muted); }
@@ -252,19 +250,12 @@ const html = `<!doctype html>
   <h1>QA Test Certificate</h1>
   <div class="subtitle">${escapeHtml(PROJECT_NAME)} &middot; generated ${generatedAt}</div>
 
-  <div class="verdict ${verdictPass ? 'pass' : 'fail'}">
-    <div>
-      ${verdict === 'PASS' ? '✅ PASS — automated results support proceeding to approval' : '❌ FAIL — do not proceed; failures require triage first'}
-    </div>
-  </div>
-
   <div class="meta-grid">
     <div class="meta-item"><div class="label">Service</div><div class="value">${escapeHtml(SERVICE_NAME)}</div></div>
     <div class="meta-item"><div class="label">Environment</div><div class="value">${escapeHtml(ENVIRONMENT)}</div></div>
     <div class="meta-item"><div class="label">Ticket</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Release Version</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Description</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">Scope</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Testers</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">SRE's</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Deployment Date</div><div class="value">${PENDING}</div></div>
@@ -285,6 +276,8 @@ const html = `<!doctype html>
     <div class="stat muted"><div class="n">${skipped}</div><div class="l">Skipped</div></div>
     <div class="stat"><div class="n">${passRate}%</div><div class="l">Pass rate</div></div>
   </div>
+
+  <p class="scope-line"><strong>Scope:</strong> ${PENDING}</p>
 
   <h2>Summary</h2>
   <table class="summary-table">
