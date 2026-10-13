@@ -1,6 +1,6 @@
 ---
 name: sat-approve
-description: Records a human sign-off against the most recent /sat-run result — appends a durable approval record and annotates the SAT Test Certificate itself. This is the step that turns a test report into an approved-for-deployment record.
+description: Records a human sign-off against the most recent /sat-run result — appends a durable approval record and stamps the SAT Test Certificate with release metadata and an endorsement. This is the step that turns a test report into an approved-for-deployment record.
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Bash(git *)
 argument-hint: "[--role qa|release] [--reject]"
@@ -24,41 +24,72 @@ failed and ask them to either rerun `/sat-run` after fixing it, or explicitly co
 want to record a rejection (not an approval) for this result — never let a FAIL turn into a
 recorded approval without the user clearly choosing that.
 
-## 2. Collect the sign-off
+## 2. Collect the release metadata
 
-Ask the user (don't assume):
+The certificate was generated with these fields still showing "Pending approval" — this is
+where they get filled in, once, for the official certified run (not on every `/sat-run`).
+Ask the user for each (pre-filling what's already known so they only have to confirm or
+correct it, not retype it):
+
+- **Service** — pre-fill from `state.json`'s `artifact_name`.
+- **Ticket** — the JIRA/tracking reference for this change. No sensible default; ask.
+- **Release version** — ask.
+- **Description** — one line on what this release/change covers. Ask.
+- **Testers** — who ran/verified these tests. Ask (comma-separated names if more than one).
+- **SEs** — any Support/Solutions Engineers who reviewed this. Ask; allow "none".
+- **Deployment date** — the planned or actual deployment date (distinct from today's
+  certification date). Ask.
+
+Then collect the sign-off itself:
 - Approver's name.
 - Role: QA Engineer or Release Approver (or something else they specify).
 - Decision: approve or reject.
 - Optional notes (e.g. why, if rejecting, or any caveat on an approval).
+
+Certification date is today's date — don't ask, just use it.
 
 ## 3. Append the durable record
 
 Append one line to `sat-approvals.jsonl` at the project root (create it if it doesn't exist —
 this file should be committed to the repo, not gitignored, since it's the audit trail):
 ```json
-{"timestamp":"<ISO timestamp>","git_commit":"<sha>","git_dirty":<bool>,"certificate_path":"<path>","test_verdict":"PASS|FAIL","approver":"<name>","role":"<role>","decision":"approve|reject","notes":"<notes or null>"}
+{"timestamp":"<ISO timestamp>","git_commit":"<sha>","git_dirty":<bool>,"certificate_path":"<path>","test_verdict":"PASS|FAIL","service":"<service>","ticket":"<ticket>","release_version":"<version>","description":"<description>","testers":"<testers>","ses":"<ses>","deployment_date":"<date>","certification_date":"<today>","approver":"<name>","role":"<role>","decision":"approve|reject","notes":"<notes or null>"}
 ```
 
-## 4. Annotate the certificate
+## 4. Stamp the certificate
 
-Open the certificate at `last_run.certificate_path`. Find the sign-off block — it has two
-lines like:
+Open the certificate at `last_run.certificate_path`. Each of the fields below appears once,
+as a `meta-item` with a distinct label next to its "Pending approval" value — match on the
+label *and* value together (so the edit is unambiguous even though every field starts with
+the same placeholder text) and replace just the value:
+
 ```html
-<div class="block">QA Engineer &nbsp;&nbsp;&nbsp;&nbsp; Signature / Date</div>
-<div class="block">Release Approver &nbsp;&nbsp;&nbsp;&nbsp; Signature / Date</div>
+<div class="meta-item"><div class="label">Ticket</div><div class="value">Pending approval</div></div>
 ```
-Replace the "Signature / Date" placeholder in the line matching the approver's role with
-their actual name and the timestamp, e.g.:
+becomes, e.g.:
 ```html
-<div class="block">QA Engineer &nbsp;&nbsp;&nbsp;&nbsp; Jane Doe — 2026-10-10T09:15:00Z (approved)</div>
+<div class="meta-item"><div class="label">Ticket</div><div class="value">JIRA-1234</div></div>
 ```
-If rejected, write `(rejected)` instead, so the certificate itself visibly carries the
-outcome rather than only the separate log file.
+
+Do this for Service, Ticket, Release Version, Description, Testers, SEs, Deployment Date, and
+Certification Date, using the values collected in step 2.
+
+Then find the Endorsement block:
+```html
+<div class="endorsement-block"><div class="endorsement-text">Pending approval — run /sat-approve to record a sign-off.</div></div>
+```
+Replace the text with a short, plain statement naming the approver, role, decision, and
+date, plus any notes — e.g.:
+```html
+<div class="endorsement-block"><div class="endorsement-text">Approved for production deployment by Jane Doe (Release Approver) on 2026-10-13. Verified by Testers: Kiran. No caveats noted.</div></div>
+```
+If rejected, write the rejection plainly instead (who rejected it, when, and why from the
+notes), so the certificate itself visibly carries the outcome rather than only the separate
+log file.
 
 ## 5. Report
 
-Confirm to the user what was recorded (approver, role, decision) and where
-(`sat-approvals.jsonl` and the annotated certificate path). If this was a rejection, remind
-them this commit should not be deployed until a fix lands and `/sat-run` + `/sat-approve` run
-again clean.
+Confirm to the user what was recorded (service, ticket, release version, approver, role,
+decision) and where (`sat-approvals.jsonl` and the stamped certificate path). If this was a
+rejection, remind them this commit should not be deployed until a fix lands and `/sat-run` +
+`/sat-approve` run again clean.

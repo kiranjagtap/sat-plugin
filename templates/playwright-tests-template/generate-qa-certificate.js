@@ -27,7 +27,9 @@ const { execSync } = require('child_process');
 
 const resultsPath = process.argv[2] || path.join(__dirname, 'test-results', 'results.json');
 const PROJECT_NAME = process.env.PROJECT_NAME || '__PROJECT_NAME__ — API Test Certificate';
+const SERVICE_NAME = PROJECT_NAME.replace(/ — API Test Certificate$/, '');
 const ENVIRONMENT = process.env.ENVIRONMENT || 'Local (developer machine)';
+const PENDING = 'Pending approval';
 
 if (!fs.existsSync(resultsPath)) {
   console.error(`Results file not found: ${resultsPath}`);
@@ -154,9 +156,13 @@ function renderCall(c, idx) {
     ? `<div class="loglabel">Application logs (correlated by request id${d.logSource ? `, via ${escapeHtml(d.logSource)}` : ''})</div><pre class="applog">${escapeHtml(appLogs.join('\n'))}</pre>`
     : `<div class="loglabel muted">No correlated application log lines were captured for this call${d.logSource ? ` (source: ${escapeHtml(d.logSource)})` : ''}.</div>`;
 
+  const statusOk = typeof res.status === 'number' && res.status < 400;
+  const plainEnglish = `Sent a ${escapeHtml((req.method || '').toUpperCase())} request to ${escapeHtml(req.url || '')}${req.body ? ' with the request body shown below' : ''}, and received ${statusOk ? 'a successful' : 'an error'} response: ${escapeHtml(res.status ?? '')} ${escapeHtml(res.statusText || '')}.`.trim();
+
   return `
     <div class="call">
       <div class="call-head">Call ${idx + 1}: <code>${escapeHtml(req.method || '')} ${escapeHtml(req.url || '')}</code> &rarr; <strong>${escapeHtml(res.status ?? '')}</strong> (${d.durationMs ?? '—'} ms)</div>
+      <div class="plain-english">${plainEnglish}</div>
       ${reqIdLine}
       <div class="grid2">
         <div>
@@ -223,8 +229,8 @@ const html = `<!doctype html>
   .ok { color: var(--ok); font-weight: 600; } .bad { color: var(--bad); font-weight: 600; }
   .warn { color: var(--warn); font-weight: 600; } .muted { color: var(--muted); }
   .scope-note { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-size: 13px; margin-bottom: 8px; }
-  .signoff { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 32px; }
-  .signoff .block { border-top: 1px solid #1f2328; padding-top: 6px; margin-top: 48px; font-size: 12px; color: var(--muted); }
+  .endorsement-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 8px; background: var(--bg-soft); }
+  .endorsement-text { font-size: 13px; white-space: pre-wrap; }
   footer { margin-top: 40px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; }
 
   .evidence-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
@@ -233,6 +239,7 @@ const html = `<!doctype html>
   .call { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }
   .call:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
   .call-head { font-size: 12.5px; margin-bottom: 4px; }
+  .plain-english { font-size: 12px; margin-bottom: 6px; }
   .kv { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
   .kv span { text-transform: uppercase; font-size: 10px; letter-spacing: 0.04em; margin-right: 6px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -254,7 +261,19 @@ const html = `<!doctype html>
   </div>
 
   <div class="meta-grid">
+    <div class="meta-item"><div class="label">Service</div><div class="value">${escapeHtml(SERVICE_NAME)}</div></div>
     <div class="meta-item"><div class="label">Environment</div><div class="value">${escapeHtml(ENVIRONMENT)}</div></div>
+    <div class="meta-item"><div class="label">Ticket</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Release Version</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Description</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Testers</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">SEs</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Deployment Date</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Certification Date</div><div class="value">${PENDING}</div></div>
+  </div>
+
+  <h2>Run details</h2>
+  <div class="meta-grid">
     <div class="meta-item"><div class="label">Run started</div><div class="value">${escapeHtml(stats.startTime || '—')}</div></div>
     <div class="meta-item"><div class="label">Duration</div><div class="value">${durationSec}s</div></div>
     <div class="meta-item"><div class="label">Git commit</div><div class="value">${escapeHtml(git.commit || 'unknown')}${git.dirty ? ' (dirty working tree)' : ''}</div></div>
@@ -293,15 +312,8 @@ const html = `<!doctype html>
   <h2>Evidence (${totalAppLogLines} correlated application log line${totalAppLogLines === 1 ? '' : 's'} captured)</h2>
   ${evidenceSections}
 
-  <h2>Sign-off</h2>
-  <div class="signoff">
-    <div>
-      <div class="block">QA Engineer &nbsp;&nbsp;&nbsp;&nbsp; Signature / Date</div>
-    </div>
-    <div>
-      <div class="block">Release Approver &nbsp;&nbsp;&nbsp;&nbsp; Signature / Date</div>
-    </div>
-  </div>
+  <h2>Endorsement</h2>
+  <div class="endorsement-block"><div class="endorsement-text">${PENDING} — run /sat-approve to record a sign-off.</div></div>
 
   <footer>
     Generated automatically by <code>generate-qa-certificate.js</code> from Playwright's JSON reporter output

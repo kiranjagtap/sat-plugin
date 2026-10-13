@@ -31,10 +31,14 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
    deployed non-prod URL via `--base-url`), generates the certificate, and records the
    verdict + git commit in `.claude/sat/state.json`.
 
-3. **`/sat-approve`** — records a human sign-off against the most recent run: asks for the
-   approver's name, role, and decision, appends it to `sat-approvals.jsonl` (a durable,
-   committed audit trail), and annotates the certificate's own sign-off section so the
-   approval travels with the document, not just a separate log.
+3. **`/sat-approve`** — records a human sign-off against the most recent run: asks for
+   release metadata (service, ticket, release version, description, testers, SEs, deployment
+   date) plus the approver's name, role, and decision, appends all of it to
+   `sat-approvals.jsonl` (a durable, committed audit trail), and stamps the certificate's own
+   header fields and Endorsement section so the full record travels with the document, not
+   just a separate log. Until this runs, those header fields show "Pending approval" and the
+   certificate has no signature lines to fill in by hand — the endorsement is text recorded
+   through this command, not a blank line waiting for a wet signature.
 
 ## Install
 
