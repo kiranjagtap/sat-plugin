@@ -40,6 +40,13 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
    certificate has no signature lines to fill in by hand — the endorsement is text recorded
    through this command, not a blank line waiting for a wet signature.
 
+4. **`/sat-clean`** -- clears generated certificates and Playwright run output
+   (`playwright-tests/qa-certificates/`, `playwright-tests/test-results/`) so the next
+   `/sat-run` starts fresh. Handy when iterating on the plugin itself across several Spring
+   Boot projects. Never touches `sat-approvals.jsonl` -- that's the committed audit trail,
+   and resetting it is a deliberate git operation you do yourself, not something this command
+   will do for you.
+
 ## Install
 
 From a Claude Code session, in any project (or globally):
