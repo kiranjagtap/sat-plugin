@@ -35,8 +35,11 @@ correct it, not retype it):
 - **Ticket** — the JIRA/tracking reference for this change. No sensible default; ask.
 - **Release version** — ask.
 - **Description** — one line on what this release/change covers. Ask.
+- **Scope** — one or two lines on what this run actually covers (which endpoints/scenarios
+  were exercised, and anything notable it does *not* cover). Ask; this is the project-specific
+  detail that belongs on the certificate, not a generic boilerplate sentence.
 - **Testers** — who ran/verified these tests. Ask (comma-separated names if more than one).
-- **SEs** — any Support/Solutions Engineers who reviewed this. Ask; allow "none".
+- **SRE's** — any Site Reliability Engineers who reviewed this. Ask; allow "none".
 - **Deployment date** — the planned or actual deployment date (distinct from today's
   certification date). Ask.
 
@@ -53,7 +56,7 @@ Certification date is today's date — don't ask, just use it.
 Append one line to `sat-approvals.jsonl` at the project root (create it if it doesn't exist —
 this file should be committed to the repo, not gitignored, since it's the audit trail):
 ```json
-{"timestamp":"<ISO timestamp>","git_commit":"<sha>","git_dirty":<bool>,"certificate_path":"<path>","test_verdict":"PASS|FAIL","service":"<service>","ticket":"<ticket>","release_version":"<version>","description":"<description>","testers":"<testers>","ses":"<ses>","deployment_date":"<date>","certification_date":"<today>","approver":"<name>","role":"<role>","decision":"approve|reject","notes":"<notes or null>"}
+{"timestamp":"<ISO timestamp>","git_commit":"<sha>","git_dirty":<bool>,"certificate_path":"<path>","test_verdict":"PASS|FAIL","service":"<service>","ticket":"<ticket>","release_version":"<version>","description":"<description>","scope":"<scope>","testers":"<testers>","sres":"<sres>","deployment_date":"<date>","certification_date":"<today>","approver":"<name>","role":"<role>","decision":"approve|reject","notes":"<notes or null>"}
 ```
 
 ## 4. Stamp the certificate
@@ -71,8 +74,8 @@ becomes, e.g.:
 <div class="meta-item"><div class="label">Ticket</div><div class="value">JIRA-1234</div></div>
 ```
 
-Do this for Service, Ticket, Release Version, Description, Testers, SEs, Deployment Date, and
-Certification Date, using the values collected in step 2.
+Do this for Service, Ticket, Release Version, Description, Scope, Testers, SRE's, Deployment
+Date, and Certification Date, using the values collected in step 2.
 
 Then find the Endorsement block:
 ```html

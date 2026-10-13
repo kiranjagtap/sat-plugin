@@ -32,7 +32,7 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
    verdict + git commit in `.claude/sat/state.json`.
 
 3. **`/sat-approve`** — records a human sign-off against the most recent run: asks for
-   release metadata (service, ticket, release version, description, testers, SEs, deployment
+   release metadata (service, ticket, release version, description, scope, testers, SRE's, deployment
    date) plus the approver's name, role, and decision, appends all of it to
    `sat-approvals.jsonl` (a durable, committed audit trail), and stamps the certificate's own
    header fields and Endorsement section so the full record travels with the document, not

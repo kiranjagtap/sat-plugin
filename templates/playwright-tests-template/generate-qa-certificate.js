@@ -12,6 +12,11 @@
  * those lines are rendered in an "Evidence" section per test, alongside the request/response,
  * similar in spirit to a manual SIT report's per-scenario log excerpts.
  *
+ * A test can optionally carry a remark that shows up in the Summary table's Result column,
+ * e.g. `testInfo.annotations.push({ type: 'note', description: 'not a real-world path' })`.
+ * Any test with one or more annotations is flagged with a warning icon instead of a plain
+ * checkmark, and the annotation text(s) are appended in parentheses.
+ *
  * Usage:
  *   node generate-qa-certificate.js [path-to-results.json]
  *
@@ -23,7 +28,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 
 const resultsPath = process.argv[2] || path.join(__dirname, 'test-results', 'results.json');
 const PROJECT_NAME = process.env.PROJECT_NAME || '__PROJECT_NAME__ — API Test Certificate';
@@ -38,23 +42,6 @@ if (!fs.existsSync(resultsPath)) {
 }
 
 const raw = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
-
-function gitInfo() {
-  const tryRun = (cmd) => {
-    try {
-      return execSync(cmd, { cwd: path.join(__dirname, '..'), stdio: ['ignore', 'pipe', 'ignore'] })
-        .toString()
-        .trim();
-    } catch {
-      return null;
-    }
-  };
-  return {
-    commit: tryRun('git rev-parse --short HEAD'),
-    branch: tryRun('git rev-parse --abbrev-ref HEAD'),
-    dirty: tryRun('git status --porcelain') ? true : false,
-  };
-}
 
 // --- Flatten the suite tree into a simple list of test results ---
 function collectTests(suite, suitePath, out) {
@@ -81,6 +68,7 @@ function collectTests(suite, suitePath, out) {
         durationMs: lastResult.duration ?? 0,
         retries: (test.results || []).length - 1,
         error: lastResult.error ? lastResult.error.message : null,
+        annotations: Array.isArray(test.annotations) ? test.annotations : [],
         apiCalls,
       });
     }
@@ -112,7 +100,6 @@ const totalAppLogLines = tests.reduce(
   0,
 );
 
-const git = gitInfo();
 const generatedAt = new Date().toISOString();
 
 // --- Render ---
@@ -121,26 +108,35 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-const rows = tests
-  .map((t) => {
-    const statusLabel = { expected: 'PASSED', unexpected: 'FAILED', flaky: 'FLAKY', skipped: 'SKIPPED' }[t.status] || t.status;
-    const statusClass = { expected: 'ok', unexpected: 'bad', flaky: 'warn', skipped: 'muted' }[t.status] || '';
-    const apiSummary = t.apiCalls
-      .map((c) => {
-        const method = c.data?.request?.method || '';
-        const url = c.data?.request?.url || '';
-        const status = c.data?.response?.status ?? '';
-        return `${escapeHtml(method)} ${escapeHtml(url)} &rarr; ${escapeHtml(status)}`;
-      })
-      .join('<br>');
+// --- Summary table: one row per test, a short scenario ID, and a plain result ---
+const summaryRows = tests
+  .map((t, i) => {
+    const id = `T${String(i + 1).padStart(2, '0')}`;
+    const remarks = t.annotations.map((a) => a.description).filter(Boolean);
+    const remarkText = remarks.length ? ` (${remarks.join('; ')})` : '';
+
+    let icon = '✔';
+    let label = 'Success';
+    let resultClass = 'ok';
+    if (t.status === 'unexpected') {
+      icon = '✘';
+      label = 'Failed';
+      resultClass = 'bad';
+    } else if (t.status === 'skipped') {
+      icon = '○';
+      label = 'Skipped';
+      resultClass = 'muted';
+    } else if (remarks.length) {
+      icon = '⚠';
+      resultClass = 'warn';
+    }
+    const errorText = t.error ? ` — ${t.error}` : '';
+
     return `
       <tr>
-        <td>${escapeHtml(t.suite)}</td>
-        <td>${escapeHtml(t.title)}</td>
-        <td class="${statusClass}">${statusLabel}</td>
-        <td>${t.durationMs} ms</td>
-        <td>${apiSummary || '—'}</td>
-        <td>${t.error ? `<span class="bad">${escapeHtml(t.error)}</span>` : '—'}</td>
+        <td>${id}</td>
+        <td>${escapeHtml(t.suite ? `${t.suite} — ${t.title}` : t.title)}</td>
+        <td class="${resultClass}">${icon} ${escapeHtml(label + remarkText + errorText)}</td>
       </tr>`;
   })
   .join('\n');
@@ -201,7 +197,7 @@ const html = `<!doctype html>
 <style>
   :root {
     --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; --muted: #6e7781;
-    --border: #d0d7de; --bg-soft: #f6f8fa;
+    --border: #d0d7de; --bg-soft: #f6f8fa; --navy: #1e3a5f;
   }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; margin: 0; padding: 40px; background: #fff; max-width: 960px; margin-inline: auto; }
@@ -210,7 +206,6 @@ const html = `<!doctype html>
   .verdict { padding: 16px 20px; border-radius: 8px; font-size: 18px; font-weight: 600; margin-bottom: 24px; display: flex; justify-content: space-between; align-items: center; }
   .verdict.pass { background: #dafbe1; color: var(--ok); border: 1px solid #aceebb; }
   .verdict.fail { background: #ffebe9; color: var(--bad); border: 1px solid #ffc1bc; }
-  .verdict small { font-weight: 400; font-size: 12px; display: block; margin-top: 2px; }
   .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .meta-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
   .meta-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -226,12 +221,16 @@ const html = `<!doctype html>
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { background: var(--bg-soft); font-size: 11px; text-transform: uppercase; color: var(--muted); }
+  table.summary-table { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  table.summary-table thead th { background: var(--navy); color: #fff; font-size: 12px; text-transform: none; padding: 10px 14px; }
+  table.summary-table td { padding: 10px 14px; font-size: 13px; }
+  table.summary-table tbody tr:nth-child(even) { background: var(--bg-soft); }
+  table.summary-table td:first-child { font-weight: 600; white-space: nowrap; }
   .ok { color: var(--ok); font-weight: 600; } .bad { color: var(--bad); font-weight: 600; }
   .warn { color: var(--warn); font-weight: 600; } .muted { color: var(--muted); }
-  .scope-note { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; font-size: 13px; margin-bottom: 8px; }
+  .note { font-size: 12px; color: var(--muted); margin: 8px 0 12px; }
   .endorsement-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 8px; background: var(--bg-soft); }
   .endorsement-text { font-size: 13px; white-space: pre-wrap; }
-  footer { margin-top: 40px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 12px; }
 
   .evidence-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
   .evidence-suite { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
@@ -256,7 +255,6 @@ const html = `<!doctype html>
   <div class="verdict ${verdictPass ? 'pass' : 'fail'}">
     <div>
       ${verdict === 'PASS' ? '✅ PASS — automated results support proceeding to approval' : '❌ FAIL — do not proceed; failures require triage first'}
-      <small>Verdict reflects this run's results only (${escapeHtml(ENVIRONMENT)}). A human reviewer must still complete the sign-off below.</small>
     </div>
   </div>
 
@@ -266,8 +264,9 @@ const html = `<!doctype html>
     <div class="meta-item"><div class="label">Ticket</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Release Version</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Description</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">Scope</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Testers</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">SEs</div><div class="value">${PENDING}</div></div>
+    <div class="meta-item"><div class="label">SRE's</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Deployment Date</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Certification Date</div><div class="value">${PENDING}</div></div>
   </div>
@@ -276,9 +275,6 @@ const html = `<!doctype html>
   <div class="meta-grid">
     <div class="meta-item"><div class="label">Run started</div><div class="value">${escapeHtml(stats.startTime || '—')}</div></div>
     <div class="meta-item"><div class="label">Duration</div><div class="value">${durationSec}s</div></div>
-    <div class="meta-item"><div class="label">Git commit</div><div class="value">${escapeHtml(git.commit || 'unknown')}${git.dirty ? ' (dirty working tree)' : ''}</div></div>
-    <div class="meta-item"><div class="label">Git branch</div><div class="value">${escapeHtml(git.branch || 'unknown')}</div></div>
-    <div class="meta-item"><div class="label">Results source</div><div class="value">${escapeHtml(path.basename(resultsPath))}</div></div>
   </div>
 
   <div class="stats-grid">
@@ -290,36 +286,22 @@ const html = `<!doctype html>
     <div class="stat"><div class="n">${passRate}%</div><div class="l">Pass rate</div></div>
   </div>
 
-  <div class="scope-note">
-    <strong>Scope of this certificate:</strong> covers only the automated test cases listed below, executed against
-    <strong>${escapeHtml(ENVIRONMENT)}</strong>. It is not a full regression or security/performance sign-off, and does not
-    by itself certify production readiness beyond the endpoints and scenarios actually exercised. Extend the test
-    suite and rerun this generator as coverage grows. Application log lines shown under "Evidence" are captured
-    directly from the running service via a per-request correlation id (<code>X-Request-Id</code>) and are not
-    edited or summarized.
-  </div>
-
-  <h2>Test results (${tests.length})</h2>
-  <table>
+  <h2>Summary</h2>
+  <table class="summary-table">
     <thead>
-      <tr><th>Suite</th><th>Test</th><th>Status</th><th>Duration</th><th>API call(s)</th><th>Error</th></tr>
+      <tr><th>ID</th><th>Scenario</th><th>Result</th></tr>
     </thead>
     <tbody>
-      ${rows}
+      ${summaryRows}
     </tbody>
   </table>
 
   <h2>Evidence (${totalAppLogLines} correlated application log line${totalAppLogLines === 1 ? '' : 's'} captured)</h2>
+  <p class="note">Application log lines shown below are captured directly from the running service via a per-request correlation id and are not edited or summarized.</p>
   ${evidenceSections}
 
   <h2>Endorsement</h2>
   <div class="endorsement-block"><div class="endorsement-text">${PENDING} — run /sat-approve to record a sign-off.</div></div>
-
-  <footer>
-    Generated automatically by <code>generate-qa-certificate.js</code> from Playwright's JSON reporter output
-    (<code>${escapeHtml(resultsPath)}</code>). This document reflects the actual recorded outcome of an automated
-    test run; it does not replace manual review before a production deployment decision.
-  </footer>
 </body>
 </html>
 `;
