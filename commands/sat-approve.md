@@ -91,18 +91,22 @@ becomes:
 <p class="scope-line"><strong>Scope:</strong> Widget API: create (incl. blank/over-length validation), get by id, list, delete (incl. repeat delete and unknown id -> 404). Not covered: update/PATCH, auth, persistence (in-memory store).</p>
 ```
 
-**Findings** is a table near the bottom with a single placeholder row:
+**Findings** is a table near the bottom with three columns -- No. (a plain running count,
+1, 2, 3, ... across the findings rows -- not a test id), Test Case (the `TC-NN` id, or blank
+if the finding isn't tied to one), and Findings (the description) -- with a single placeholder
+row spanning all three:
 ```html
-<tr><td colspan="2" class="muted">Pending approval — findings recorded during /sat-approve, if any.</td></tr>
+<tr><td colspan="3" class="muted">Pending approval — findings recorded during /sat-approve, if any.</td></tr>
 ```
-If the user reported findings, replace that single row with one `<tr>` per finding:
+If the user reported findings, replace that single row with one `<tr>` per finding, numbering
+the first column sequentially starting at 1:
 ```html
-<tr><td>TC-07</td><td>Returns 500 instead of 400 when the MIN is 9 digits.</td></tr>
+<tr><td>1</td><td>TC-07</td><td>Returns 500 instead of 400 when the MIN is 9 digits.</td></tr>
 ```
 If they reported none, replace it with a clear "no findings" row instead of leaving the
 "Pending approval" wording:
 ```html
-<tr><td colspan="2" class="muted">No findings identified during this SIT run.</td></tr>
+<tr><td colspan="3" class="muted">No findings identified during this SIT run.</td></tr>
 ```
 
 There is no Endorsement block any more -- the certificate ends after the Findings table.

@@ -24,7 +24,6 @@
  *   node generate-qa-certificate.js [path-to-results.json]
  *
  * Env overrides:
- *   PROJECT_NAME   - the scaffolded project/service name (used only for the small subtitle)
  *   REPORT_TITLE   - the certificate's own title, e.g. "CCAP - SIT report" (default: "QA Test Certificate")
  *   DESCRIPTION    - one line shown directly below the title, describing this report
  *   ENVIRONMENT    - where the tests ran (default: "Local (developer machine)")
@@ -34,8 +33,6 @@ const fs = require('fs');
 const path = require('path');
 
 const resultsPath = process.argv[2] || path.join(__dirname, 'test-results', 'results.json');
-const RAW_PROJECT_NAME = process.env.PROJECT_NAME || '__PROJECT_NAME__ — API Test Certificate';
-const SERVICE_NAME = RAW_PROJECT_NAME.replace(/ — API Test Certificate$/, '');
 const REPORT_TITLE = process.env.REPORT_TITLE || 'QA Test Certificate';
 const DESCRIPTION = process.env.DESCRIPTION || '';
 const ENVIRONMENT = process.env.ENVIRONMENT || 'Local (developer machine)';
@@ -215,9 +212,8 @@ const html = `<!doctype html>
   }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; margin: 0; padding: 40px; background: #fff; max-width: 960px; margin-inline: auto; }
-  h1 { font-size: 22px; margin: 0 0 6px; }
-  .report-description { font-size: 14px; color: #1f2328; margin: 0 0 10px; line-height: 1.5; }
-  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  h1 { font-size: 22px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .report-description { font-size: 14px; color: #1f2328; margin: 0 0 24px; line-height: 1.5; }
   .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .meta-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
   .meta-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -260,7 +256,6 @@ const html = `<!doctype html>
 <body>
   <h1>${escapeHtml(REPORT_TITLE)}</h1>
   ${DESCRIPTION ? `<p class="report-description">${escapeHtml(DESCRIPTION)}</p>` : ''}
-  <div class="subtitle">${escapeHtml(SERVICE_NAME)} &middot; generated ${generatedAt}</div>
 
   <div class="meta-grid">
     <div class="meta-item"><div class="label">Release Version</div><div class="value">${PENDING}</div></div>
@@ -301,10 +296,10 @@ const html = `<!doctype html>
   <h2>Findings — Bugs identified during SIT</h2>
   <table class="summary-table">
     <thead>
-      <tr><th>Test Case No.</th><th>Finding</th></tr>
+      <tr><th>No.</th><th>Test Case</th><th>Findings</th></tr>
     </thead>
     <tbody>
-      <tr><td colspan="2" class="muted">${FINDINGS_PLACEHOLDER}</td></tr>
+      <tr><td colspan="3" class="muted">${FINDINGS_PLACEHOLDER}</td></tr>
     </tbody>
   </table>
 
