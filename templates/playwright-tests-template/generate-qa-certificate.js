@@ -242,9 +242,6 @@ const html = `<!doctype html>
   .ok { color: var(--ok); font-weight: 600; } .bad { color: var(--bad); font-weight: 600; }
   .warn { color: var(--warn); font-weight: 600; } .muted { color: var(--muted); }
   .note { font-size: 12px; color: var(--muted); margin: 8px 0 12px; }
-  .endorsement-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 8px; background: var(--bg-soft); }
-  .endorsement-text { font-size: 13px; white-space: pre-wrap; }
-
   .evidence-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
   .err-block { font-size: 12px; margin-bottom: 8px; white-space: pre-wrap; }
   .call { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }
@@ -311,8 +308,6 @@ const html = `<!doctype html>
     </tbody>
   </table>
 
-  <h2>Endorsement</h2>
-  <div class="endorsement-block"><div class="endorsement-text">${PENDING} — run /sat-approve to record a sign-off.</div></div>
 </body>
 </html>
 `;
