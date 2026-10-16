@@ -36,17 +36,16 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
    `testInfo.annotations.push({ type: 'scenario', description: '...' })`, otherwise the raw
    test title is shown.
 
-3. **`/sat-approve`** — records a human sign-off against the most recent run: asks for
-   release metadata (service, ticket, release version, scope, testers, SRE's, deployment
-   date, and any findings/bugs identified during the run) plus the approver's name, role, and
-   decision, appends all of it to `sat-approvals.jsonl` (a durable, committed audit trail),
-   and stamps the certificate's Release Version, Certification Date, Scope, Findings table,
-   and Endorsement section so the full record travels with the document, not just a separate
-   log. (Service, Ticket, Testers, SRE's and Deployment Date are recorded in the jsonl audit
-   trail but intentionally not shown on the certificate itself, to keep it focused.) Until
-   this runs, those fields show "Pending approval" and the certificate has no signature lines
-   to fill in by hand — the endorsement is text recorded
-   through this command, not a blank line waiting for a wet signature.
+3. **`/sat-approve`** — finalizes the most recent run: asks for release metadata (service,
+   ticket, release version, scope, deployment date, and any findings/bugs identified during
+   the run), appends all of it to `sat-approvals.jsonl` (a durable, committed record), and
+   stamps the certificate's Release Version, Certification Date, Scope, and Findings table.
+   There's no human sign-off step any more -- no approver, role, or approve/reject decision,
+   and no Endorsement section on the certificate. The certificate is a test report, not an
+   approval record. (Service, Ticket, and Deployment Date are recorded in the jsonl record
+   but intentionally not shown on the certificate itself, to keep it focused.) Until this
+   runs, Release Version, Certification Date, Scope, and Findings all show "Pending
+   approval" on the certificate.
 
 4. **`/sat-clean`** -- clears generated certificates and Playwright run output
    (`playwright-tests/qa-certificates/`, `playwright-tests/test-results/`) so the next
