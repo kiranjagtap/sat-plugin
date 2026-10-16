@@ -1,6 +1,6 @@
 ---
 name: sat-scaffold
-description: One-time setup for a Spring Boot project — adds request-correlated SLF4J logging and a Playwright API test harness that can produce a SAT Test Certificate. Run once per project; safe to re-run (skips what already exists).
+description: One-time setup for a Spring Boot project — adds request-correlated SLF4J logging and a Playwright API test harness that can produce a SAT Test Certificate. Safe to re-run anytime -- skips what already exists, and auto-refreshes plugin-owned generated files (like generate-qa-certificate.js) to the latest template without touching hand-written test specs.
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(npm *), Bash(git *), Bash(find *), Bash(grep *), Bash(cat *), Bash(mkdir *)
 argument-hint: "[--artifact-id <name>]"
@@ -9,8 +9,11 @@ argument-hint: "[--artifact-id <name>]"
 Set up this Spring Boot project for the `sat` workflow (`/sat-scaffold` → `/sat-run` →
 `/sat-approve`): request-correlated SLF4J logging in the app, and a Playwright API test
 harness that can turn a test run into a structured SAT Test Certificate. This command is
-idempotent — re-running it should skip anything already present and report what it skipped,
-never silently clobber hand-written test specs or an existing filter.
+safe to re-run at any time, including after a plugin update: steps 1-4 skip anything already
+present, and step 5 auto-refreshes the Playwright harness's plugin-owned generated files
+(e.g. `generate-qa-certificate.js`) to match the plugin's current templates. It never
+silently clobbers hand-written test specs, `package.json`, or an existing filter -- see step
+5 for exactly what counts as plugin-owned vs. yours.
 
 ## 1. Confirm this is a Spring Boot project
 
@@ -122,24 +125,53 @@ settings.
 In every branch above, add `logs/` to the project's `.gitignore` if it isn't already
 ignored.
 
-## 5. Scaffold the Playwright test harness
+## 5. Scaffold or refresh the Playwright test harness
 
-If a `playwright-tests/` directory already exists at the project root, stop here — report
-what's already there and don't touch it. (If the user wants it refreshed, that's a manual,
-explicit decision, not something this command does automatically.)
+First, split the template's files into two groups:
 
-Otherwise, copy `${CLAUDE_PLUGIN_ROOT}/templates/playwright-tests-template/` to
-`playwright-tests/` at the project root, preserving its structure. In the copy, replace every
-occurrence of `__PROJECT_NAME__` with a human-readable project name (derive one from the
-artifact name, e.g. `widget-service` → `widget-service`) and `__ARTIFACT_NAME__` with the
-real artifact name, across `package.json`, `generate-qa-certificate.js`, `playwright.config.ts`,
-`README.md`, and `utils/log-sources/*.ts`.
+- **Plugin-owned** — this command fully owns these and keeps them in sync with the plugin's
+  templates on every run: `generate-qa-certificate.js`, `playwright.config.ts`,
+  `tsconfig.json`, `.gitignore`, `README.md`, `utils/logger.ts`, and everything under
+  `utils/log-sources/`.
+- **Never touched by this command, under any circumstance**: everything under `tests/` (the
+  user's own hand-written specs -- the template only ships a `.gitkeep` there), and
+  `package.json`, `package-lock.json`, `node_modules/` (all three are also managed by `npm
+  install`, which the user runs themselves and may have added real dependencies to).
 
-Then run `npm install` inside `playwright-tests/`.
+**5a. If `playwright-tests/` doesn't exist yet** (first time in this project): copy
+`${CLAUDE_PLUGIN_ROOT}/templates/playwright-tests-template/` to `playwright-tests/` at the
+project root in full, preserving its structure. In the copy, replace every occurrence of
+`__PROJECT_NAME__` with a human-readable project name (derive one from the artifact name,
+e.g. `widget-service` → `widget-service`) and `__ARTIFACT_NAME__` with the real artifact
+name, across `package.json`, `generate-qa-certificate.js`, `playwright.config.ts`,
+`README.md`, and `utils/log-sources/*.ts`. Then run `npm install` inside `playwright-tests/`.
+
+**5b. If `playwright-tests/` already exists** (re-run, typically after a plugin update):
+this is a refresh, not a fresh scaffold -- don't touch `tests/`, `package.json`,
+`package-lock.json`, or `node_modules/` at all, and don't run `npm install`. For each
+plugin-owned file listed above:
+- Read it from `${CLAUDE_PLUGIN_ROOT}/templates/playwright-tests-template/`, substitute
+  `__PROJECT_NAME__`/`__ARTIFACT_NAME__` using the artifact name already recorded in
+  `.claude/sat/state.json` (no need to re-derive it), and compare the result to what's
+  currently on disk at the matching path under `playwright-tests/`.
+- Identical → nothing to do; just count it.
+- Different, or missing from this project entirely (the template gained a file since this
+  project was scaffolded) → write it, overwriting if present, and count it as refreshed.
+
+Then, separately, compare only the template `package.json`'s `scripts` section (not the rest
+of the file) to the project's `playwright-tests/package.json`. If a script the plugin
+depends on (`test`, `test:certify`, or any other the template defines) is missing or
+differs, don't touch `package.json` -- instead show the user the exact script line(s) that
+differ and ask them to apply it by hand, the same way step 4b hands back a logging-config
+snippet instead of editing someone's file for them. If the scripts already match, say
+nothing further about it.
+
+Report counts, not a huge file-by-file listing: e.g. "Refreshed 1 file
+(generate-qa-certificate.js), 7 already up to date."
 
 ## 6. Record state
 
-Create or update `.claude/sat/state.json` at the project root:
+**First-time scaffold** — create `.claude/sat/state.json` at the project root:
 ```json
 {
   "scaffolded": true,
@@ -155,11 +187,19 @@ Create or update `.claude/sat/state.json` at the project root:
 }
 ```
 
+**Refresh run** (5b) — leave `scaffolded`, `scaffolded_at`, `artifact_name`, `correlation`,
+and `last_run` exactly as they are; just add/update a `last_refreshed_at` field with the
+current ISO timestamp, so it's visible when the plugin-owned files were last synced.
+
 ## 7. Summarize
 
-Tell the user plainly what was created vs. skipped vs. reused at each step. If step 4 landed
-in the manual-action branch (4b), call that out clearly and separately from the rest — the
-filter and Playwright harness are in place and `/sat-run` will work, but app log lines won't
-correlate to specific test calls until the user adds the shown snippet to their own Logback
-config. Otherwise, confirm `/sat-run` is the next command — it needs the app actually running
-(reachable over HTTP) to do anything useful.
+Tell the user plainly what was created vs. skipped vs. reused vs. refreshed at each step. If
+step 4 landed in the manual-action branch (4b), call that out clearly and separately from
+the rest — the filter and Playwright harness are in place and `/sat-run` will work, but app
+log lines won't correlate to specific test calls until the user adds the shown snippet to
+their own Logback config. Otherwise, confirm `/sat-run` is the next command — it needs the
+app actually running (reachable over HTTP) to do anything useful.
+
+On a refresh run (5b) where nothing else changed, keep this short: a one-line file-count
+summary plus, if relevant, the `package.json` scripts note -- don't re-walk steps 1-4 in
+detail when they all just confirmed "already present, skipped."

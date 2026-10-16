@@ -1,8 +1,8 @@
 # sat
 
 A Claude Code plugin for Spring Boot services: scaffolds correlated-log API test automation,
-runs it, and produces a structured **SAT Test Certificate** with a recorded human approval —
-the thing you'd point at before a production deployment.
+runs it, and produces a structured **SAT Test Certificate** — the thing you'd point at before
+a production deployment.
 
 A standalone companion to [saga](https://github.com/thepipeman/saga) — run it any time, on
 any Spring Boot project, saga-managed or not. It doesn't touch saga's own workflow state.
@@ -25,7 +25,12 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
      printable HTML certificate: pass/fail verdict, per-test results, and — per API call —
      the request/response alongside the application's own correlated log lines.
 
-   Idempotent: re-running it skips anything already present rather than overwriting it.
+   Safe to re-run any time, including after updating the plugin: the Spring Boot-side setup
+   (filter, logging config) is skipped if already present, and the Playwright harness's
+   plugin-owned files (`generate-qa-certificate.js`, `playwright.config.ts`, the log-source
+   utilities, etc.) are refreshed to match the current plugin templates. Your hand-written
+   test specs under `tests/`, and anything `npm` manages (`package.json`,
+   `package-lock.json`, `node_modules/`), are never touched.
 
 2. **`/sat-run`** — asks for the report's own title (e.g. "CCAP - SIT report") and a short
    description, then runs the test suite against a running instance of the app (local or a
