@@ -212,7 +212,7 @@ const html = `<!doctype html>
   }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; margin: 0; padding: 40px; background: #fff; max-width: 960px; margin-inline: auto; }
-  h1 { font-size: 22px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  h1 { font-size: 22px; margin: 0 0 12px; padding-bottom: 12px; border-bottom: 2px solid var(--navy); }
   .report-description { font-size: 14px; color: #1f2328; margin: 0 0 24px; line-height: 1.5; }
   .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .meta-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
