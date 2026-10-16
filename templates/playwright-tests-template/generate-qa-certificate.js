@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Generates a QA Test Certificate (self-contained HTML, printable) from a Playwright
+ * Generates a SIT/QA Test Certificate (self-contained HTML, printable) from a Playwright
  * `json` reporter output file (test-results/results.json by default).
  *
  * Reusable: rerun this after every test run (not just POST /api/tasks — any suite you
@@ -12,17 +12,21 @@
  * those lines are rendered in an "Evidence" section per test, alongside the request/response,
  * similar in spirit to a manual SIT report's per-scenario log excerpts.
  *
- * A test can optionally carry a remark that shows up in the Summary table's Result column,
- * e.g. `testInfo.annotations.push({ type: 'note', description: 'not a real-world path' })`.
- * Any test with one or more annotations is flagged with a warning icon instead of a plain
- * checkmark, and the annotation text(s) are appended in parentheses.
+ * A test can carry two kinds of annotation, pushed via `testInfo.annotations.push(...)`:
+ *   - { type: 'scenario', description: 'Happy path - valid MIN and valid code' }
+ *     Overrides the Summary table's Scenario text (otherwise falls back to the raw
+ *     Playwright test title).
+ *   - { type: 'note', description: '...' } (or any other type)
+ *     Shown as a remark next to the result, with a warning icon instead of a plain
+ *     checkmark -- e.g. "Success (not a real-world path)".
  *
  * Usage:
  *   node generate-qa-certificate.js [path-to-results.json]
  *
  * Env overrides:
- *   PROJECT_NAME   - shown as the certified application/service name
- *   TEST_SCOPE     - one-line description of what this run covered
+ *   PROJECT_NAME   - the scaffolded project/service name (used only for the small subtitle)
+ *   REPORT_TITLE   - the certificate's own title, e.g. "CCAP - SIT report" (default: "QA Test Certificate")
+ *   DESCRIPTION    - one line shown directly below the title, describing this report
  *   ENVIRONMENT    - where the tests ran (default: "Local (developer machine)")
  */
 
@@ -30,10 +34,13 @@ const fs = require('fs');
 const path = require('path');
 
 const resultsPath = process.argv[2] || path.join(__dirname, 'test-results', 'results.json');
-const PROJECT_NAME = process.env.PROJECT_NAME || '__PROJECT_NAME__ — API Test Certificate';
-const SERVICE_NAME = PROJECT_NAME.replace(/ — API Test Certificate$/, '');
+const RAW_PROJECT_NAME = process.env.PROJECT_NAME || '__PROJECT_NAME__ — API Test Certificate';
+const SERVICE_NAME = RAW_PROJECT_NAME.replace(/ — API Test Certificate$/, '');
+const REPORT_TITLE = process.env.REPORT_TITLE || 'QA Test Certificate';
+const DESCRIPTION = process.env.DESCRIPTION || '';
 const ENVIRONMENT = process.env.ENVIRONMENT || 'Local (developer machine)';
 const PENDING = 'Pending approval';
+const FINDINGS_PLACEHOLDER = 'Pending approval — findings recorded during /sat-approve, if any.';
 
 if (!fs.existsSync(resultsPath)) {
   console.error(`Results file not found: ${resultsPath}`);
@@ -108,11 +115,19 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// --- Summary table: one row per test, a short scenario ID, and a plain result ---
+// Each test gets a stable TC-NN id, shared between the Summary table, the Evidence
+// section's headings, and (later, by hand in /sat-approve) the Findings table.
+function tcId(i) {
+  return `TC-${String(i + 1).padStart(2, '0')}`;
+}
+
+// --- Summary table: one row per test, a scenario description, and a plain result ---
 const summaryRows = tests
   .map((t, i) => {
-    const id = `T${String(i + 1).padStart(2, '0')}`;
-    const remarks = t.annotations.map((a) => a.description).filter(Boolean);
+    const id = tcId(i);
+    const scenarioAnnotation = t.annotations.find((a) => a && a.type === 'scenario' && a.description);
+    const scenarioText = scenarioAnnotation ? scenarioAnnotation.description : t.title;
+    const remarks = t.annotations.filter((a) => a && a.type !== 'scenario').map((a) => a.description).filter(Boolean);
     const remarkText = remarks.length ? ` (${remarks.join('; ')})` : '';
 
     let icon = '✔';
@@ -135,7 +150,7 @@ const summaryRows = tests
     return `
       <tr>
         <td>${id}</td>
-        <td>${escapeHtml(t.title)}</td>
+        <td>${escapeHtml(scenarioText)}</td>
         <td class="${resultClass}">${icon} ${escapeHtml(label + remarkText + errorText)}</td>
       </tr>`;
   })
@@ -181,8 +196,7 @@ const evidenceSections = tests
     const calls = t.apiCalls.map((c, idx) => renderCall(c, idx)).join('\n');
     return `
     <div class="evidence-block">
-      <h3>${i + 1}. ${escapeHtml(t.title)} <span class="${statusClass}">[${statusLabel}]</span></h3>
-      <div class="evidence-suite">${escapeHtml(t.suite)}</div>
+      <h3>${tcId(i)}. ${escapeHtml(t.title)} <span class="${statusClass}">[${statusLabel}]</span></h3>
       ${t.error ? `<div class="bad err-block">${escapeHtml(t.error)}</div>` : ''}
       ${calls || '<div class="muted">No API calls recorded for this test.</div>'}
     </div>`;
@@ -193,7 +207,7 @@ const html = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>QA Test Certificate — ${escapeHtml(PROJECT_NAME)}</title>
+<title>${escapeHtml(REPORT_TITLE)}</title>
 <style>
   :root {
     --ok: #1a7f37; --bad: #cf222e; --warn: #9a6700; --muted: #6e7781;
@@ -201,7 +215,8 @@ const html = `<!doctype html>
   }
   * { box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; color: #1f2328; margin: 0; padding: 40px; background: #fff; max-width: 960px; margin-inline: auto; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 { font-size: 22px; margin: 0 0 6px; }
+  .report-description { font-size: 14px; color: #1f2328; margin: 0 0 10px; line-height: 1.5; }
   .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
   .meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
   .meta-item { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; }
@@ -231,7 +246,6 @@ const html = `<!doctype html>
   .endorsement-text { font-size: 13px; white-space: pre-wrap; }
 
   .evidence-block { border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-top: 14px; }
-  .evidence-suite { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
   .err-block { font-size: 12px; margin-bottom: 8px; white-space: pre-wrap; }
   .call { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 10px; }
   .call:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
@@ -247,18 +261,12 @@ const html = `<!doctype html>
 </style>
 </head>
 <body>
-  <h1>QA Test Certificate</h1>
-  <div class="subtitle">${escapeHtml(PROJECT_NAME)} &middot; generated ${generatedAt}</div>
+  <h1>${escapeHtml(REPORT_TITLE)}</h1>
+  ${DESCRIPTION ? `<p class="report-description">${escapeHtml(DESCRIPTION)}</p>` : ''}
+  <div class="subtitle">${escapeHtml(SERVICE_NAME)} &middot; generated ${generatedAt}</div>
 
   <div class="meta-grid">
-    <div class="meta-item"><div class="label">Service</div><div class="value">${escapeHtml(SERVICE_NAME)}</div></div>
-    <div class="meta-item"><div class="label">Environment</div><div class="value">${escapeHtml(ENVIRONMENT)}</div></div>
-    <div class="meta-item"><div class="label">Ticket</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Release Version</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">Description</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">Testers</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">SRE's</div><div class="value">${PENDING}</div></div>
-    <div class="meta-item"><div class="label">Deployment Date</div><div class="value">${PENDING}</div></div>
     <div class="meta-item"><div class="label">Certification Date</div><div class="value">${PENDING}</div></div>
   </div>
 
@@ -292,6 +300,16 @@ const html = `<!doctype html>
   <h2>Evidence (${totalAppLogLines} correlated application log line${totalAppLogLines === 1 ? '' : 's'} captured)</h2>
   <p class="note">Application log lines shown below are captured directly from the running service via a per-request correlation id and are not edited or summarized.</p>
   ${evidenceSections}
+
+  <h2>Findings — Bugs identified during SIT</h2>
+  <table class="summary-table">
+    <thead>
+      <tr><th>Test Case No.</th><th>Finding</th></tr>
+    </thead>
+    <tbody>
+      <tr><td colspan="2" class="muted">${FINDINGS_PLACEHOLDER}</td></tr>
+    </tbody>
+  </table>
 
   <h2>Endorsement</h2>
   <div class="endorsement-block"><div class="endorsement-text">${PENDING} — run /sat-approve to record a sign-off.</div></div>
