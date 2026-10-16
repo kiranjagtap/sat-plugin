@@ -27,17 +27,25 @@ any Spring Boot project, saga-managed or not. It doesn't touch saga's own workfl
 
    Idempotent: re-running it skips anything already present rather than overwriting it.
 
-2. **`/sat-run`** — runs the test suite against a running instance of the app (local or a
+2. **`/sat-run`** — asks for the report's own title (e.g. "CCAP - SIT report") and a short
+   description, then runs the test suite against a running instance of the app (local or a
    deployed non-prod URL via `--base-url`), generates the certificate, and records the
-   verdict + git commit in `.claude/sat/state.json`.
+   verdict + git commit + title/description in `.claude/sat/state.json`. Each test gets a
+   `TC-01`, `TC-02`, ... id in the certificate's Summary table and Evidence section; a test
+   can supply its own human-readable scenario text via
+   `testInfo.annotations.push({ type: 'scenario', description: '...' })`, otherwise the raw
+   test title is shown.
 
 3. **`/sat-approve`** — records a human sign-off against the most recent run: asks for
-   release metadata (service, ticket, release version, description, scope, testers, SRE's, deployment
-   date) plus the approver's name, role, and decision, appends all of it to
-   `sat-approvals.jsonl` (a durable, committed audit trail), and stamps the certificate's own
-   header fields and Endorsement section so the full record travels with the document, not
-   just a separate log. Until this runs, those header fields show "Pending approval" and the
-   certificate has no signature lines to fill in by hand — the endorsement is text recorded
+   release metadata (service, ticket, release version, scope, testers, SRE's, deployment
+   date, and any findings/bugs identified during the run) plus the approver's name, role, and
+   decision, appends all of it to `sat-approvals.jsonl` (a durable, committed audit trail),
+   and stamps the certificate's Release Version, Certification Date, Scope, Findings table,
+   and Endorsement section so the full record travels with the document, not just a separate
+   log. (Service, Ticket, Testers, SRE's and Deployment Date are recorded in the jsonl audit
+   trail but intentionally not shown on the certificate itself, to keep it focused.) Until
+   this runs, those fields show "Pending approval" and the certificate has no signature lines
+   to fill in by hand — the endorsement is text recorded
    through this command, not a blank line waiting for a wet signature.
 
 4. **`/sat-clean`** -- clears generated certificates and Playwright run output
